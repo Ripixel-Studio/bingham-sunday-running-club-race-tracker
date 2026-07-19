@@ -12,7 +12,11 @@ export const firebaseConfig = {
 // OAuth endpoint from the existing -website Firebase function
 export const OAUTH_AUTH_URL = import.meta.env.VITE_OAUTH_AUTH_URL || 'https://binghamsundayrunningclub.co.uk/api/auth';
 
-// GitHub repository details
-export const GITHUB_OWNER = 'ripixel';
-export const GITHUB_REPO = 'bingham-sunday-running-club-website';
-export const GITHUB_BRANCH = 'main';
+// GitHub repository details for the -website repo that results are written to.
+// These are env-configurable so that moving/renaming the repo is a config change,
+// not a code change. GitHub 301-redirects reads (GET) to a moved repo, but writes
+// (the Git Data API used to save results) are not redirected and fail — so these
+// MUST point at the repo's current owner/name for saving to work.
+export const GITHUB_OWNER = import.meta.env.VITE_GITHUB_OWNER || 'ripixel';
+export const GITHUB_REPO = import.meta.env.VITE_GITHUB_REPO || 'bingham-sunday-running-club-website';
+export const GITHUB_BRANCH = import.meta.env.VITE_GITHUB_BRANCH || 'main';
