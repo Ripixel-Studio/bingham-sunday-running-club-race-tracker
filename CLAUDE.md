@@ -52,7 +52,7 @@ Defined in `src/types/result.ts`:
 
 Copy `.env.example` to `.env`. The Firebase config (`VITE_FIREBASE_*`) must match the `-website` Firebase project. `VITE_OAUTH_AUTH_URL` can be left unset to use the production OAuth endpoint.
 
-The target `-website` repo that results are written to is set by `VITE_GITHUB_OWNER` / `VITE_GITHUB_REPO` / `VITE_GITHUB_BRANCH` (defaults: `ripixel` / `bingham-sunday-running-club-website` / `main`). If that repo is renamed or transferred, update these — GitHub redirects reads to the moved repo but not writes, so a stale value breaks saving while leaving reads working.
+The target `-website` repo that results are written to is set by `VITE_GITHUB_OWNER` / `VITE_GITHUB_REPO` / `VITE_GITHUB_BRANCH` (defaults: `ripixel-studio` / `bingham-sunday-running-club-website` / `main`). If that repo is renamed or transferred, update these — GitHub redirects reads to the moved repo but not writes, so a stale value breaks saving while leaving reads working.
 
 ### Deployment
 
