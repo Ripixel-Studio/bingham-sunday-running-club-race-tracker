@@ -1,0 +1,41 @@
+name: CI
+
+# Run on every PR targeting the default branch. A green "build" check here is
+# meant to be trustworthy enough to gate auto-merge of low-risk dependency bumps,
+# so it installs strictly from the committed lockfile and runs the real build.
+on:
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same PR to keep things fast.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      # Install exactly what the lockfile pins, so a bumped dependency is the
+      # version actually exercised by the build below.
+      - name: Install dependencies
+        run: npm ci
+
+      # `npm run build` is `tsc -b && vite build` — this is the repo's real
+      # TypeScript typecheck AND production build in one step. The repo defines
+      # no lint or test scripts, so there is nothing else to run here.
+      - name: Build (typecheck + Vite production build)
+        run: npm run build
