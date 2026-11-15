@@ -1,3 +1,5 @@
+import { isOwnDistanceValid } from '../lib/entry';
+
 /**
  * Loop configuration
  */
@@ -53,7 +55,7 @@ export const LOOP_CONFIGS: Record<'small' | 'medium' | 'long', LoopConfig> = {
 export interface Participant {
   runner: string; // Runner ID (slug) or "guest"
   guestName?: string; // Display name for guests (only when runner="guest")
-  distance: number; // Total distance in km
+  distance: number; // Total distance in km (explicit for own-route entries, loops all 0)
   smallLoops: number;
   mediumLoops: number;
   longLoops: number;
@@ -90,7 +92,34 @@ export interface LiveParticipant {
   longLoops: number;
   startTime: number; // Timestamp in ms
   finishTime?: number; // Elapsed time in ms when finished
+  timerFinishTime?: number; // What the timer read when Stop was tapped (shown beside a typed time)
+  timeInvalid?: boolean; // Typed time currently fails validation (blocks Complete / Save)
+  ownDistance?: number; // km; set = "own route" (free-form distance), loops are ignored
+  distanceInvalid?: boolean; // Typed own-route distance currently fails validation
   status: 'running' | 'finished' | 'completed';
   convertToRunner?: boolean; // Flag to create full runner on submit
   runnerNameOverride?: string; // Custom name for runner conversion (defaults to nickname)
+}
+
+/**
+ * Distance for a live participant: the own-route distance if set, otherwise
+ * loops plus the approach (approach only when there are any loops).
+ */
+export function participantDistance(p: Pick<LiveParticipant, 'smallLoops' | 'mediumLoops' | 'longLoops' | 'ownDistance'>): number {
+  if (p.ownDistance !== undefined) return p.ownDistance;
+  const totalLoops = p.smallLoops + p.mediumLoops + p.longLoops;
+  const loopDistance =
+    p.smallLoops * LOOP_DISTANCES.small +
+    p.mediumLoops * LOOP_DISTANCES.medium +
+    p.longLoops * LOOP_DISTANCES.long;
+  return totalLoops > 0 ? APPROACH_DISTANCE + loopDistance : 0;
+}
+
+/** True when the participant's entry can be completed / saved. */
+export function isEntryValid(p: LiveParticipant): boolean {
+  if (p.timeInvalid) return false;
+  if (p.ownDistance !== undefined) {
+    return !p.distanceInvalid && isOwnDistanceValid(p.ownDistance);
+  }
+  return true;
 }

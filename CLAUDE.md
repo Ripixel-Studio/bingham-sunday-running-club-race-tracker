@@ -38,7 +38,16 @@ All writes use the Git Data API (createBlob → createTree → createCommit → 
 
 - **setup**: select runners (registered or guest), optionally load a previously staged run to correct it
 - **running**: live loop counter per participant, global timer, immersive mode (header/nav hidden), Wake Lock API to prevent screen sleep. State auto-saved to `localStorage` on every render so a page reload mid-race resumes correctly.
-- **review**: edit finish times/loop counts, upload race photo, optionally promote guests to full runners, then commit everything to GitHub
+- **review**: edit finish times and loops / own-route distance, upload race photo, optionally promote guests to full runners, then commit everything to GitHub
+
+### Entering a runner's result (time + route)
+
+After **Stop Timer** a runner is `finished` and needs their entry; the same fields appear for every runner on the review screen (including runners added there late):
+
+- **Finish time** is typed directly (`src/components/entry/TimeInput.tsx`): number pad (`inputMode="numeric"`), colons inserted automatically (`2745` → 27:45, `10210` → 1:02:10), pre-filled with the timer's reading (shown as "timer said …" when changed). Bad entries (seconds/minutes over 59, under 1:00, over 3:00:00) are flagged inline and block **Complete** / **Save**. Parsing lives in `src/lib/entry.ts`.
+- **Loops / Own route** switch (`src/components/entry/RouteEntry.tsx`). Own route is for runners who do their own thing instead of the loops: quick picks 3k/5k/8k/10k or an exact km (0.5–30). Stored as `LiveParticipant.ownDistance`.
+
+Own-route runners are written to the staging file with an explicit `distance` and all loops `0`; the website's `process-staging` labels them "Own route" on the results page. Loading a staged run turns `distance` + zero loops back into own route.
 
 ### Loop distances
 

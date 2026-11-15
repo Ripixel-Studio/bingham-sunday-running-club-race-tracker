@@ -221,6 +221,7 @@ export async function createRunResult(
       smallLoops: number;
       mediumLoops: number;
       longLoops: number;
+      ownDistance?: number; // km; set = own route (free-form), loops written as 0
       startTime: number;
       endTime: number;
     }>;
@@ -287,9 +288,9 @@ export async function createRunResult(
         return {
           runner: runnerId,
           ...(isGuest && !convertedId && p.nickname ? { guestName: p.nickname } : {}),
-          smallLoops: p.smallLoops,
-          mediumLoops: p.mediumLoops,
-          longLoops: p.longLoops,
+          ...(p.ownDistance !== undefined
+            ? { distance: p.ownDistance, smallLoops: 0, mediumLoops: 0, longLoops: 0 }
+            : { smallLoops: p.smallLoops, mediumLoops: p.mediumLoops, longLoops: p.longLoops }),
           time: formatTime(p.endTime - p.startTime),
         };
       }),
@@ -468,6 +469,7 @@ export interface StagedRun {
   participants: Array<{
     runner: string;
     guestName?: string;
+    distance?: number;  // Explicit km; with all loops 0 = own route
     smallLoops: number;
     mediumLoops: number;
     longLoops: number;
