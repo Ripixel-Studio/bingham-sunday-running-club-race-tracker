@@ -8,6 +8,9 @@ import { fetchRunners, createRunResult, fetchLatestRunTimes, fetchStagedRuns } f
 import type { Runner, TrackedRunner } from '../types/runner';
 import type { StagedRun } from '../lib/github';
 import type { LiveParticipant } from '../types/result';
+import { isEntryValid } from '../types/result';
+import { TimeInput } from '../components/entry/TimeInput';
+import { RouteEntry } from '../components/entry/RouteEntry';
 
 interface TrackerPageProps {
   octokit: Octokit;
@@ -274,6 +277,8 @@ export function TrackerPage({ octokit, setImmersiveMode }: TrackerPageProps) {
             ...p,
             status: 'finished', // Pending info entry
             finishTime: now - startTime,
+            timerFinishTime: now - startTime,
+            timeInvalid: false,
           };
         }
         return p;
@@ -305,6 +310,8 @@ export function TrackerPage({ octokit, setImmersiveMode }: TrackerPageProps) {
             ...p,
             status: 'running',
             finishTime: undefined,
+            timerFinishTime: undefined,
+            timeInvalid: false,
           };
         }
         return p;
@@ -327,20 +334,14 @@ export function TrackerPage({ octokit, setImmersiveMode }: TrackerPageProps) {
     );
   }, []);
 
-  // Update finish time directly (for time adjustments)
-  const handleUpdateTime = useCallback((runnerId: string, newTimeMs: number) => {
+  // Patch a participant's entry (typed finish time, own-route distance, validity flags)
+  const handlePatch = useCallback((runnerId: string, patch: Partial<LiveParticipant>) => {
     setParticipants((prev) =>
-      prev.map((p) => {
-        if (p.runnerId === runnerId) {
-          return {
-            ...p,
-            finishTime: newTimeMs,
-          };
-        }
-        return p;
-      })
+      prev.map((p) => (p.runnerId === runnerId ? { ...p, ...patch } : p))
     );
   }, []);
+
+  const allEntriesValid = participants.every(isEntryValid);
 
   // Add a late runner (they start NOW, not at race start time)
   const handleAddLateRunner = useCallback(() => {
@@ -458,6 +459,10 @@ export function TrackerPage({ octokit, setImmersiveMode }: TrackerPageProps) {
 
   // Save results to GitHub
   const handleSaveResults = async () => {
+    if (!participants.every(isEntryValid)) {
+      alert('Fix the times or distances marked in red before saving.');
+      return;
+    }
     setIsSaving(true);
     try {
       // Use the original date if re-uploading, otherwise current date
@@ -475,6 +480,7 @@ export function TrackerPage({ octokit, setImmersiveMode }: TrackerPageProps) {
           smallLoops: p.smallLoops,
           mediumLoops: p.mediumLoops,
           longLoops: p.longLoops,
+          ownDistance: p.ownDistance,
           startTime: p.startTime!,
           endTime: p.startTime! + (p.finishTime || 0),
         })),
@@ -536,6 +542,8 @@ export function TrackerPage({ octokit, setImmersiveMode }: TrackerPageProps) {
     const loadedParticipants: LiveParticipant[] = run.participants.map((p, index) => {
       const timeMs = parseTimeToMs(p.time);
       const isGuest = p.runner === 'guest';
+      // Own-route entries: explicit distance and no loops
+      const isOwnRoute = !p.smallLoops && !p.mediumLoops && !p.longLoops && typeof p.distance === 'number' && p.distance > 0;
 
       return {
         runnerId: isGuest ? `guest-reupload-${index}` : p.runner,
@@ -545,6 +553,7 @@ export function TrackerPage({ octokit, setImmersiveMode }: TrackerPageProps) {
         smallLoops: p.smallLoops,
         mediumLoops: p.mediumLoops,
         longLoops: p.longLoops,
+        ownDistance: isOwnRoute ? p.distance : undefined,
         startTime: now - timeMs, // Fake start time so finishTime calculation works
         finishTime: timeMs,
         status: 'completed',
@@ -668,7 +677,7 @@ export function TrackerPage({ octokit, setImmersiveMode }: TrackerPageProps) {
           participants={participants}
           globalElapsedTime={elapsedTime}
           onUpdateLoops={handleUpdateLoops}
-          onUpdateTime={handleUpdateTime}
+          onPatch={handlePatch}
           onFinish={handleFinish}
           onComplete={handleComplete}
           onUndoComplete={handleUndoComplete}
@@ -864,8 +873,6 @@ export function TrackerPage({ octokit, setImmersiveMode }: TrackerPageProps) {
           <div className="space-y-4">
             {participants.map((p) => {
               const isGuest = p.runnerId.startsWith('guest-');
-              const finishMinutes = Math.floor((p.finishTime || 0) / 60000);
-              const finishSeconds = Math.floor(((p.finishTime || 0) % 60000) / 1000);
 
               return (
                 <div key={p.runnerId + p.runnerName} className="p-4 bg-gray-700/50 rounded-lg border border-gray-600">
@@ -909,45 +916,21 @@ export function TrackerPage({ octokit, setImmersiveMode }: TrackerPageProps) {
                   {/* Time Edit */}
                   <div className="mb-3">
                     <label className="block text-xs text-gray-400 mb-1">Finish Time</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="0"
-                        max="999"
-                        value={finishMinutes}
-                        onChange={(e) => {
-                          const mins = Math.max(0, parseInt(e.target.value) || 0);
-                          const newTime = (mins * 60 + finishSeconds) * 1000;
-                          setParticipants(prev => prev.map(part =>
-                            part.runnerId === p.runnerId
-                              ? { ...part, finishTime: newTime }
-                              : part
-                          ));
-                        }}
-                        className="w-16 px-2 py-2 text-center text-lg font-mono bg-gray-600 border border-gray-500 rounded text-white focus:border-orange focus:outline-none"
-                      />
-                      <span className="text-gray-400 text-lg">:</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="59"
-                        value={finishSeconds.toString().padStart(2, '0')}
-                        onChange={(e) => {
-                          const secs = Math.min(59, Math.max(0, parseInt(e.target.value) || 0));
-                          const newTime = (finishMinutes * 60 + secs) * 1000;
-                          setParticipants(prev => prev.map(part =>
-                            part.runnerId === p.runnerId
-                              ? { ...part, finishTime: newTime }
-                              : part
-                          ));
-                        }}
-                        className="w-16 px-2 py-2 text-center text-lg font-mono bg-gray-600 border border-gray-500 rounded text-white focus:border-orange focus:outline-none"
-                      />
-                      <span className="text-gray-500 text-sm ml-2">(mm:ss)</span>
-                    </div>
+                    <TimeInput
+                      size="lg"
+                      valueMs={p.finishTime || 0}
+                      timerMs={p.timerFinishTime}
+                      onChange={(ms) => handlePatch(p.runnerId, { finishTime: ms })}
+                      onValidityChange={(valid) => handlePatch(p.runnerId, { timeInvalid: !valid })}
+                    />
                   </div>
 
-                  {/* Loop Counts */}
+                  {/* Loops or Own route */}
+                  <RouteEntry
+                    ownDistance={p.ownDistance}
+                    onSetOwnDistance={(km) => handlePatch(p.runnerId, { ownDistance: km })}
+                    onDistanceValidityChange={(valid) => handlePatch(p.runnerId, { distanceInvalid: !valid })}
+                    loops={
                   <div className="grid grid-cols-3 gap-2">
                     {/* Small Loops */}
                     <div className="bg-gray-800/50 rounded p-2 text-center">
@@ -1024,6 +1007,8 @@ export function TrackerPage({ octokit, setImmersiveMode }: TrackerPageProps) {
                       </div>
                     </div>
                   </div>
+                    }
+                  />
 
                   {/* Guest conversion checkbox */}
                   {isGuest && (
@@ -1129,7 +1114,7 @@ export function TrackerPage({ octokit, setImmersiveMode }: TrackerPageProps) {
               </div>
 
               <p className="text-gray-400 text-sm mb-4">
-                ⚠️ Added runners will have 0:00 time and 0 loops. Edit them after adding.
+                ⚠️ Added runners start with no time. Type their finish time, then set their loops or Own route distance.
               </p>
 
               {/* Actions */}
@@ -1264,8 +1249,11 @@ export function TrackerPage({ octokit, setImmersiveMode }: TrackerPageProps) {
 
         </div>
 
+        {!allEntriesValid && (
+          <p className="text-sm text-red-400 mb-3">Fix the times or distances marked in red to save.</p>
+        )}
         <div className="flex gap-4">
-          <Button onClick={handleSaveResults} variant="success" size="lg" disabled={isSaving}>
+          <Button onClick={handleSaveResults} variant="success" size="lg" disabled={isSaving || !allEntriesValid}>
             {isSaving ? (
               <>
                 <span className="animate-spin inline-block mr-2">⏳</span>

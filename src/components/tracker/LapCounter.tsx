@@ -1,35 +1,26 @@
 import { Button } from '../ui/Button';
-import { APPROACH_DISTANCE, LOOP_DISTANCES } from '../../types/result';
+import { formatTimeMs as formatTime } from '../../lib/entry';
+import { participantDistance, isEntryValid } from '../../types/result';
 import type { LiveParticipant } from '../../types/result';
+import { TimeInput } from '../entry/TimeInput';
+import { RouteEntry } from '../entry/RouteEntry';
 
 interface LapCounterProps {
   participant: LiveParticipant;
   globalElapsedTime: number;
   onUpdateLoops: (runnerId: string, type: 'small' | 'medium' | 'long', delta: number) => void;
-  onUpdateTime?: (runnerId: string, newTimeMs: number) => void;
+  onPatch: (runnerId: string, patch: Partial<LiveParticipant>) => void;
   onFinish: (runnerId: string) => void;
   onComplete: (runnerId: string) => void;
   onUndoComplete: (runnerId: string) => void;
   onResume: (runnerId: string) => void;
 }
 
-// Helper function for distance calculation
-// Includes the approach distance (to/from start) when there are any loops
-const calculateDistance = (smallLoops: number, mediumLoops: number, longLoops: number): number => {
-  const totalLoops = smallLoops + mediumLoops + longLoops;
-  const loopDistance =
-    smallLoops * LOOP_DISTANCES.small +
-    mediumLoops * LOOP_DISTANCES.medium +
-    longLoops * LOOP_DISTANCES.long;
-  // Only add approach distance if there are any loops
-  return totalLoops > 0 ? APPROACH_DISTANCE + loopDistance : 0;
-};
-
 export function LapCounter({
   participant,
   globalElapsedTime,
   onUpdateLoops,
-  onUpdateTime,
+  onPatch,
   onFinish,
   onComplete,
   onUndoComplete,
@@ -42,6 +33,7 @@ export function LapCounter({
     mediumLoops,
     longLoops,
     finishTime,
+    ownDistance,
     status
   } = participant;
 
@@ -55,15 +47,8 @@ export function LapCounter({
     ? finishTime
     : globalElapsedTime;
 
-  const distance = calculateDistance(smallLoops, mediumLoops, longLoops);
-
-  // Format elapsed time
-  const formatTime = (ms: number): string => {
-    const totalSeconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
+  const distance = participantDistance(participant);
+  const canComplete = isEntryValid(participant);
 
   // Status-based styles
   const containerClasses = {
@@ -83,24 +68,9 @@ export function LapCounter({
       <div className="flex items-center justify-between mb-1">
         <h3 className="font-bold text-sm truncate flex-1 mr-2">{runnerName}</h3>
         <div className="text-right text-xs">
-          <span className="font-mono font-bold">{distance.toFixed(1)}km</span>
-          {/* Time display with edit controls for finished/completed */}
-          {(currentStatus === 'finished' || currentStatus === 'completed') && onUpdateTime && finishTime !== undefined ? (
-            <span className="ml-1 inline-flex items-center gap-1">
-              <button
-                onClick={() => onUpdateTime(runnerId, Math.max(0, finishTime - 5000))}
-                className="w-5 h-5 flex items-center justify-center rounded bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold"
-                title="Subtract 5 seconds"
-              >−</button>
-              <span className="font-mono text-orange">{formatTime(finishTime)}</span>
-              <button
-                onClick={() => onUpdateTime(runnerId, finishTime + 5000)}
-                className="w-5 h-5 flex items-center justify-center rounded bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold"
-                title="Add 5 seconds"
-              >+</button>
-            </span>
-          ) : (
-            <span className="text-gray-400 ml-1">{formatTime(elapsedTime)}</span>
+          <span className="font-mono font-bold">{ownDistance === 0 ? '—' : distance.toFixed(1)}km</span>
+          {currentStatus !== 'finished' && (
+            <span className={`ml-1 ${currentStatus === 'completed' ? 'font-mono text-orange' : 'text-gray-400'}`}>{formatTime(elapsedTime)}</span>
           )}
         </div>
       </div>
@@ -114,8 +84,23 @@ export function LapCounter({
         </div>
       )}
 
-      {/* Loop Counters - Only visible for Finished (Timer Stopped) state */}
+      {/* Entry - Only visible for Finished (Timer Stopped) state: typed time, then loops or own route */}
       {currentStatus === 'finished' && (
+        <div className="mb-2">
+          <div className="flex items-start gap-2 mb-2 text-xs text-gray-400">
+            <span className="pt-2.5">Time</span>
+            <TimeInput
+              valueMs={finishTime ?? elapsedTime}
+              timerMs={participant.timerFinishTime}
+              onChange={(ms) => onPatch(runnerId, { finishTime: ms })}
+              onValidityChange={(valid) => onPatch(runnerId, { timeInvalid: !valid })}
+            />
+          </div>
+          <RouteEntry
+            ownDistance={ownDistance}
+            onSetOwnDistance={(km) => onPatch(runnerId, { ownDistance: km })}
+            onDistanceValidityChange={(valid) => onPatch(runnerId, { distanceInvalid: !valid })}
+            loops={
         <div className="flex justify-between gap-1 mb-2">
           {/* Small Loop */}
           <div className="flex-1 shrink-0 min-w-fit bg-gray-900/50 rounded p-1 text-center">
@@ -180,15 +165,22 @@ export function LapCounter({
             </div>
           </div>
         </div>
+            }
+          />
+        </div>
       )}
 
-      {/* Read-only loop summary for Completed */}
+      {/* Read-only summary for Completed */}
       {currentStatus === 'completed' && (
-        <div className="flex justify-center gap-3 text-xs text-gray-400 mb-1">
-          <span>S:{smallLoops}</span>
-          <span>M:{mediumLoops}</span>
-          <span>L:{longLoops}</span>
-        </div>
+        ownDistance !== undefined ? (
+          <div className="text-center text-xs text-orange mb-1">Own route · {ownDistance.toFixed(1)} km</div>
+        ) : (
+          <div className="flex justify-center gap-3 text-xs text-gray-400 mb-1">
+            <span>S:{smallLoops}</span>
+            <span>M:{mediumLoops}</span>
+            <span>L:{longLoops}</span>
+          </div>
+        )
       )}
 
       {/* Action Buttons */}
@@ -216,6 +208,7 @@ export function LapCounter({
             </Button>
             <Button
               onClick={() => onComplete(runnerId)}
+              disabled={!canComplete}
               variant="success"
               size="sm"
               className="flex-[2] py-1 h-8 min-h-0 text-sm font-bold shadow-sm"

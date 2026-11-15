@@ -5,7 +5,7 @@ interface TrackerGridProps {
   participants: LiveParticipant[];
   globalElapsedTime: number;
   onUpdateLoops: (runnerId: string, type: 'small' | 'medium' | 'long', delta: number) => void;
-  onUpdateTime?: (runnerId: string, newTimeMs: number) => void;
+  onPatch: (runnerId: string, patch: Partial<LiveParticipant>) => void;
   onFinish: (runnerId: string) => void;
   onComplete: (runnerId: string) => void;
   onUndoComplete: (runnerId: string) => void;
@@ -16,7 +16,7 @@ export function TrackerGrid({
   participants,
   globalElapsedTime,
   onUpdateLoops,
-  onUpdateTime,
+  onPatch,
   onFinish,
   onComplete,
   onUndoComplete,
@@ -51,7 +51,7 @@ export function TrackerGrid({
                 participant={participant}
                 globalElapsedTime={globalElapsedTime}
                 onUpdateLoops={onUpdateLoops}
-                onUpdateTime={onUpdateTime}
+                onPatch={onPatch}
                 onFinish={onFinish}
                 onComplete={onComplete}
                 onUndoComplete={onUndoComplete}
@@ -66,7 +66,7 @@ export function TrackerGrid({
       {finishedParticipants.length > 0 && (
         <div className="bg-orange/5 p-4 rounded-xl border border-orange/20">
           <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-orange">
-            ⏱️ Timer Stopped — Enter Loops
+            ⏱️ Timer Stopped — Enter Time & Route
             <span className="bg-orange/20 text-orange text-sm px-2 py-1 rounded-full">{finishedParticipants.length}</span>
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
@@ -76,7 +76,7 @@ export function TrackerGrid({
                 participant={participant}
                 globalElapsedTime={globalElapsedTime}
                 onUpdateLoops={onUpdateLoops}
-                onUpdateTime={onUpdateTime}
+                onPatch={onPatch}
                 onFinish={onFinish}
                 onComplete={onComplete}
                 onUndoComplete={onUndoComplete}
@@ -101,7 +101,7 @@ export function TrackerGrid({
                 participant={participant}
                 globalElapsedTime={globalElapsedTime}
                 onUpdateLoops={onUpdateLoops}
-                onUpdateTime={onUpdateTime}
+                onPatch={onPatch}
                 onFinish={onFinish}
                 onComplete={onComplete}
                 onUndoComplete={onUndoComplete}
