@@ -1,6 +1,7 @@
 import { Octokit } from 'octokit';
 import { GITHUB_OWNER, GITHUB_REPO, GITHUB_BRANCH } from './config';
 import type { Runner } from '../types/runner';
+import { blobToBase64, shrinkForUpload, RACE_PHOTO, RUNNER_PHOTO } from './image';
 // import type { Participant } from '../types/result';
 
 /**
@@ -95,7 +96,7 @@ export async function createRunner(
       const photoPath = `assets/images/runners/${runner.id}.jpg`;
       const photoUrl = await uploadImage(
         octokit,
-        photoBlob,
+        await shrinkForUpload(photoBlob, RUNNER_PHOTO),
         photoPath,
         `feat(images): add photo for runner ${runner.name}`
       );
@@ -161,14 +162,7 @@ export async function uploadImage(
   path: string,
   commitMessage: string
 ): Promise<string> {
-  const arrayBuffer = await imageBlob.arrayBuffer();
-  // Encode as base64
-  const bytes = new Uint8Array(arrayBuffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  const content = btoa(binary);
+  const content = await blobToBase64(imageBlob);
 
   // Check if file exists and get its SHA
   const sha = await getFileSha(octokit, path);
@@ -238,13 +232,9 @@ export async function createRunResult(
     let photoUrl: string | undefined = data.existingPhotoUrl;
     if (data.photoBlob) {
       const photoPath = `assets/images/races/${dateStr}.jpg`;
-      const photoArrayBuffer = await data.photoBlob.arrayBuffer();
-      const photoBytes = new Uint8Array(photoArrayBuffer);
-      let photoBinary = '';
-      for (let i = 0; i < photoBytes.byteLength; i++) {
-        photoBinary += String.fromCharCode(photoBytes[i]);
-      }
-      const photoBase64 = btoa(photoBinary);
+      const photoBase64 = await blobToBase64(
+        await shrinkForUpload(data.photoBlob, RACE_PHOTO)
+      );
       filesToCreate.push({ path: photoPath, content: photoBase64, isBase64: true });
       photoUrl = `/${photoPath.replace(/^assets\//, '')}`;
     }
